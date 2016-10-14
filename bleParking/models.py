@@ -2,6 +2,7 @@ from django.db import models
 from djangotoolbox.fields import EmbeddedModelField
 from .forms import ObjectListCharField,ObjectListFloatField,ObjectListParklotStatusField
 import datetime
+import re
 from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
@@ -55,7 +56,7 @@ class status(models.Model):
     #    return "%d, %d, %s, %s " % (self.free,self.total,self.update_on,self.update_by)
 
 class parklot(models.Model):
-    pk_id=models.CharField(max_length=24,db_column='id',verbose_name='id')
+    pk_id=models.CharField(max_length=24,db_column='id',verbose_name='parklotId')
     description=models.CharField(max_length=50)
     addr = EmbedOverrideCharField('addr')
     create_on=models.DateTimeField('create_on')
@@ -69,10 +70,15 @@ class parklot(models.Model):
     class Meta:
         db_table='parklot'
 
+    def __unicode__(self):
+        return "%s ------ %s, %s, %s, %s" % (self.description, self.addr.province, self.addr.city,\
+                                             self.addr.district, self.addr.street)
+
     #def get_pk_id(self):
     #    pk_id=models.CharField(db_column='id')
     #    return pk_id.__unicode__
     #db.parklot.update({"addr.province": ''}, {$set:{"addr.district": ""}}, false, true);
+
     def save(self):
 
         #TODO: once changed the form of embeded fields, this logic should be updated
@@ -94,7 +100,7 @@ class parklot(models.Model):
         pre = parklot.find_one({'_id': ObjectId(self.pk)})
         #print "***************** %s" % (type(self.pk),)
         if pre == None:
-            now = datetime.datetime.now()
+            #now = datetime.datetime.now()
             current['create_on']=now
             current['update_on']=now
             #status
@@ -102,7 +108,7 @@ class parklot(models.Model):
                 current['status']={
                     "free":self.status.free,
                     "total":self.status.total,
-                    "update_on":now,
+                    "update_on":self.status.update_on,
                     "update_by": self.status.update_by,
                 }
 
@@ -110,13 +116,13 @@ class parklot(models.Model):
             # if not exist, insert and print id here, if true then success
         else:
             # if exist, update it manually
-            now = datetime.datetime.now()
+            #now = datetime.datetime.now()
             current['update_on'] = now
             if hasattr(self,'status'):
                 current['status']={
                     "free":self.status.free,
                     "total":self.status.total,
-                    "update_on":now,
+                    "update_on":self.status.update_on,
                     "update_by":self.status.update_by,
                 }
             #logger.debug('123123123123............')
@@ -127,9 +133,10 @@ class parklot(models.Model):
                 pass
 
 class regcheck(models.Model):
+    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='regcheckId')
     #todo:next should be objectid
-    agent=models.CharField(max_length=24)
-    parklot=models.CharField(max_length=24)
+    agent=models.CharField(max_length=24,verbose_name='agentId')
+    parklot=models.CharField(max_length=24, verbose_name='parklotId')
     car_plate=models.CharField(max_length=24)
     create_on=models.DateTimeField()
     update_on=models.DateTimeField()
@@ -147,6 +154,7 @@ class regcheck(models.Model):
 
 
 class parkticket(models.Model):
+    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='parkticketId')
     car_plate=models.CharField(max_length=20)
     #todo next 2 should be objectid field
     parklot=models.CharField(max_length=24)
@@ -162,13 +170,22 @@ class parkticket(models.Model):
     class Meta:
         db_table="parkticket"
 
+
+
 class agent(models.Model):
+    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')
     nick=models.CharField(max_length=20)
     pic=models.CharField(max_length=24,blank=True,default='img/test.jpg')
-    parklot=models.CharField(max_length=24,blank=True)
+    parklot=models.CharField(max_length=200,blank=True)
     #parklot=objectIDField()
     #parklot=models.ManyToManyField(parklot,blank=True,editable=False)
-    pas=models.CharField(max_length=24,blank=True,verbose_name='password',db_column='pass',editable=False,default='xxxxxx')
+    #parklot=models.ForeignKey(parklot)
+#
+    #def get_parklot_desc(self,obj):
+    #    return obj.parklot.description
+    #get_parklot_desc.short_description='parklot description '
+
+    pas=models.CharField(max_length=100,blank=True,verbose_name='password',db_column='pass',editable=False,default='xxxxxx')
     update_on=models.DateTimeField()
     phone=models.CharField(max_length=11)
     create_on=models.DateTimeField()
@@ -181,6 +198,9 @@ class agent(models.Model):
     class Meta:
         db_table='agent'
 
+    def __unicode__(self):
+        return "%s----%s" % (self.nick,self.phone )
+
 
     def save(self):
         current = {
@@ -188,6 +208,16 @@ class agent(models.Model):
             "nick":self.nick,
 
         }
+        if hasattr(self,'parklot'):
+            an=re.search('ObjectId',self.parklot)
+            #logger.debug('-----------------{0}'.format( self.parklot))
+            if an :
+
+                parklot=re.sub('ObjectId\(\'|\'\)|[\[\] ]', '', self.parklot)
+
+            else:
+                parklot=self.parklot
+            current['parklot'] = [ObjectId(i) for i in parklot.split(',')]
         agent = db.agent
         #print "***************%s" % (type(self.pk),)
         pre = agent.find_one({'_id': ObjectId(self.pk)})
