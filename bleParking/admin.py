@@ -95,7 +95,7 @@ class parklotAdmin(admin.ModelAdmin):
 
 class regcheckAdmin(admin.ModelAdmin):
     list_display=('pk_id','agent','parklot','car_plate','create_on','state')
-    search_fields=['car_plate']
+    search_fields=['car_plate','agent','parklot']
     readonly_fields=['pk_id','agent','parklot','car_plate','create_on','update_on','state','pic']
     fields=['pk_id','agent','parklot','car_plate','pic','state','create_on','update_on']
     list_filter=['create_on']
@@ -125,11 +125,11 @@ class regcheckAdmin(admin.ModelAdmin):
         #
         # Search on main model (parklot)
         if q != '':
-            regcheck_obj_list = self.m#odel.objects.filter(car_plate__contains=q)
+            regcheck_obj_list = self.model.objects.filter(car_plate__contains=q)
             try:
                 regcheck_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
-                #regcheck_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
-                #regcheck_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
+                regcheck_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
+                regcheck_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
             except:
                 pass
             logger.debug('heyheyhey----resultlo-{0}'.format(regcheck_obj_list))
@@ -185,8 +185,8 @@ class parkticketAdmin(admin.ModelAdmin):
             parkticket_obj_list = self.model.objects.filter(car_plate__contains=q)
             try:
                 parkticket_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
-                #parkticket_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
-                #parkticket_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
+                parkticket_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
+                parkticket_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
             except:
                 pass
             logger.debug('heyheyhey----resultlo-{0}'.format(parkticket_obj_list))

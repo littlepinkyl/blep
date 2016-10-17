@@ -1,8 +1,9 @@
 from django.db import models
-from djangotoolbox.fields import EmbeddedModelField
+from djangotoolbox.fields import EmbeddedModelField,ListField
 from .forms import ObjectListCharField,ObjectListFloatField,ObjectListParklotStatusField
 import datetime
 import re
+import ast
 from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
@@ -28,6 +29,62 @@ class EmbedOverrideParklotStatusfield(EmbeddedModelField):
     def formfield(self,**kwargs):
         return models.Field.formfield(self, ObjectListParklotStatusField, **kwargs)
 # Create your models here.
+
+
+class ObjectIdField(models.TextField):
+    """    model Fields for objectID    """
+    __metaclass__ = models.SubfieldBase
+
+    def to_python(self, value):
+        '''python to human'''
+        if not value:
+            return value
+
+        try:
+            return re.findall(r'ObjectId\("([a-zA-Z0-9]+")\)',value)
+        except Exception:
+            return value
+
+    def prepare_value(self, value):
+        ''' human to python'''
+        if not value:
+            return value
+        try:
+            return ObjectId(value)
+        except Exception:
+            return value
+
+
+class ObjectIdListField(ObjectIdField):
+
+    def __init__(self, *args, **kwargs):
+        super(ObjectIdField, self).__init__(*args, **kwargs)
+
+    def to_python(self, value):
+        if not value:
+            return value
+
+        if isinstance(value, list):
+            logger.debug('------heyhey---enter isinstance')
+            return map(super(ObjectIdField,self).to_python,value)
+
+        #return ast.literal_eval(value)
+        return super(ObjectIdField,self).to_python(value)
+
+    def prepare_value(self, value):
+        if value is None:
+            return value
+
+        if isinstance(value,list):
+            return [i for i in value if isinstance(i,ObjectId)] | [ObjectId(i) for i in value if not isinstance(i,ObjectId)]
+
+        return super(ObjectIdField,self).to_python(value)
+        #
+        #if isinstance(value,list):
+        #    return eval(value)
+        #return unicode(value)
+
+
 class addr(models.Model):
     province=models.CharField(max_length=10)
     city=models.CharField(max_length=10)
@@ -56,7 +113,8 @@ class status(models.Model):
     #    return "%d, %d, %s, %s " % (self.free,self.total,self.update_on,self.update_by)
 
 class parklot(models.Model):
-    pk_id=models.CharField(max_length=24,db_column='id',verbose_name='parklotId')
+    #pk_id=models.CharField(max_length=24,db_column='id',verbose_name='parklotId')
+    pk_id=ObjectIdField(db_column='id',verbose_name='ParklotId')
     description=models.CharField(max_length=50)
     addr = EmbedOverrideCharField('addr')
     create_on=models.DateTimeField('create_on')
@@ -133,10 +191,13 @@ class parklot(models.Model):
                 pass
 
 class regcheck(models.Model):
-    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='regcheckId')
+    #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='regcheckId')
+    pk_id = ObjectIdField(db_column='id',verbose_name='regcheckId')
     #todo:next should be objectid
-    agent=models.CharField(max_length=24,verbose_name='agentId')
-    parklot=models.CharField(max_length=24, verbose_name='parklotId')
+    #agent=models.CharField(max_length=24,verbose_name='agentId')
+    #parklot=models.CharField(max_length=24, verbose_name='parklotId')
+    agent=ObjectIdField()
+    parklot=ObjectIdField()
     car_plate=models.CharField(max_length=24)
     create_on=models.DateTimeField()
     update_on=models.DateTimeField()
@@ -154,11 +215,14 @@ class regcheck(models.Model):
 
 
 class parkticket(models.Model):
-    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='parkticketId')
+    #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='parkticketId')
+    pk_id = ObjectIdField(db_column='id', verbose_name='parkticketId')
     car_plate=models.CharField(max_length=20)
     #todo next 2 should be objectid field
-    parklot=models.CharField(max_length=24)
-    agent=models.CharField(max_length=24)
+    #parklot=models.CharField(max_length=24)
+    parklot=ObjectIdField()
+    #agent=models.CharField(max_length=24)
+    agent=ObjectIdField()
     create_on=models.DateTimeField()
     update_on=models.DateTimeField()
     payment_state = models.CharField(max_length=30,db_column='payment_state', blank=True)
@@ -173,10 +237,13 @@ class parkticket(models.Model):
 
 
 class agent(models.Model):
-    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')
+    #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')
+    pk_id = ObjectIdField(db_column='id', verbose_name='agentId')
     nick=models.CharField(max_length=20)
     pic=models.CharField(max_length=24,blank=True,default='img/test.jpg')
     parklot=models.CharField(max_length=200,blank=True)
+    #parklot=ObjectIdListField(db_column='parklot',verbose_name='parklotList')
+
     #parklot=objectIDField()
     #parklot=models.ManyToManyField(parklot,blank=True,editable=False)
     #parklot=models.ForeignKey(parklot)
