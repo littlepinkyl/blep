@@ -35,7 +35,7 @@ class ObjectIdField(models.TextField):
     """    model Fields for objectID    """
     __metaclass__ = models.SubfieldBase
 
-    def to_python(self, value):
+    def prepare_value(self, value):
         '''python to human'''
         if not value:
             return value
@@ -45,7 +45,7 @@ class ObjectIdField(models.TextField):
         except Exception:
             return value
 
-    def prepare_value(self, value):
+    def to_python(self, value):
         ''' human to python'''
         if not value:
             return value
@@ -60,18 +60,18 @@ class ObjectIdListField(ObjectIdField):
     def __init__(self, *args, **kwargs):
         super(ObjectIdField, self).__init__(*args, **kwargs)
 
-    def to_python(self, value):
+    def prepare_value(self, value):
         if not value:
             return value
 
         if isinstance(value, list):
             logger.debug('------heyhey---enter isinstance')
-            return map(super(ObjectIdField,self).to_python,value)
+            return map(super(ObjectIdField,self).prepare_value,value)
 
         #return ast.literal_eval(value)
-        return super(ObjectIdField,self).to_python(value)
+        return super(ObjectIdField,self).prepare_value(value)
 
-    def prepare_value(self, value):
+    def to_python(self, value):
         if value is None:
             return value
 
@@ -234,7 +234,24 @@ class parkticket(models.Model):
     class Meta:
         db_table="parkticket"
 
-
+    #def detail_parklot(self):
+    #    parklot=db.parklot
+    #    result=parklot.find_one({'_id':ObjectId(self.parklot)})
+    #    logger.debug('herehere---------------{0}'.format(self.parklot))
+    #    #return "%s---%s,%s,%s# <%s>" % (result['description'],result['city'],result['district'],result['street'],result['id'])
+    #    if result:
+    #        return "%s---%s,%s,%s,%s <%s>" % (result['description'],result['addr']['province'],result['addr']['city'],result['addr']['district'],result['addr']['street'],result['_id'])
+    #    else:
+    #        return self.parklot
+    ##search_parklot.short_cut
+#
+    #def detail_agent(self):
+    #    agent=db.agent
+    #    result=agent.find_one({'_id':ObjectId(self.agent)})
+    #    if result:
+    #        return "%s,%s <%s>" % (result['nick'],result['phone'],result['_id'])
+    #    else:
+    #        return self.agent
 
 class agent(models.Model):
     #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')
