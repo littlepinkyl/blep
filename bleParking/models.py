@@ -1,19 +1,22 @@
 from django.db import models
-from djangotoolbox.fields import EmbeddedModelField,ListField
+from djangotoolbox.fields import EmbeddedModelField
 from .forms import ObjectListCharField,ObjectListFloatField,ObjectListParklotStatusField
 import datetime
 import re
-import ast
+from bson.objectid import ObjectId
 from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
 from mongoengine import connect
-import logging
-logger = logging.getLogger('django')
+
 from pymongo import MongoClient
-from bson.objectid import ObjectId
+
+
+import logging
 client = MongoClient('localhost', 27017)
 db = client.bleparking
+
+logger = logging.getLogger('django')
 
 
 class EmbedOverrideCharField(EmbeddedModelField):
@@ -34,51 +37,67 @@ class EmbedOverrideParklotStatusfield(EmbeddedModelField):
 class ObjectIdField(models.TextField):
     """    model Fields for objectID    """
     __metaclass__ = models.SubfieldBase
+    # prepare_value used as first and ObjectIdfield can used be searched, but sth unknown changed and  ObjectId search got failure
+    # 1.5 django doc doesn't mention prepare_value but get_prep_value so use this one instead
+    # and it WORKS!!!!!! DON'T KNOW WHY!!!!
+    #def prepare_value(self, value):
+    #    '''python to human'''
+    #    if not value:
+    #        return value
+#
+    #    try:
+#
+    #        logger.debug('objectid_prepare_value---------{0}'.format(re.findall(r'ObjectId\("([a-zA-Z0-9]+)"\)',value)))
+    #        return re.findall(r'ObjectId\(\'([a-z0-9]+)\'\)',value)
+    #    except Exception:
+    #        return value
 
-    def prepare_value(self, value):
-        '''python to human'''
-        if not value:
-            return value
+    def get_prep_value(self,value):
+        logger.debug('get_prep_value-------{0}----{1}'.format(value,type(value)))
+        if not isinstance(value,ObjectId):
+            return ObjectId(value)
+        return value
 
-        try:
-            return re.findall(r'ObjectId\("([a-zA-Z0-9]+")\)',value)
-        except Exception:
-            return value
 
     def to_python(self, value):
         ''' human to python'''
-        if not value:
+        if not value:#
             return value
-        try:
-            return ObjectId(value)
-        except Exception:
-            return value
+        logger.debug('objectid_to_python---------{0}-------{1}'.format(value, type(value)))
+        return value
+
+        #try:#
+        #    r=ObjectId(value)
+        #    logger.debug('objectid_to_python---------{0}-------{1}'.format(r,type(r)))
+        #    return r
+        #except Exception:
+        #    return value
 
 
-class ObjectIdListField(ObjectIdField):
-
-    def __init__(self, *args, **kwargs):
-        super(ObjectIdField, self).__init__(*args, **kwargs)
-
-    def prepare_value(self, value):
-        if not value:
-            return value
-
-        if isinstance(value, list):
-            logger.debug('------heyhey---enter isinstance')
-            return map(super(ObjectIdField,self).prepare_value,value)
-
-        #return ast.literal_eval(value)
-        return super(ObjectIdField,self).prepare_value(value)
-
-    def to_python(self, value):
-        if value is None:
-            return value
-
-        if isinstance(value,list):
-            return [i for i in value if isinstance(i,ObjectId)] | [ObjectId(i) for i in value if not isinstance(i,ObjectId)]
-
-        return super(ObjectIdField,self).to_python(value)
+#class ObjectIdListField(ObjectIdField):
+#
+#    def __init__(self, *args, **kwargs):
+#        super(ObjectIdField, self).__init__(*args, **kwargs)
+#
+#    def prepare_value(self, value):
+#        if not value:
+#            return value
+#
+#        if isinstance(value, list):
+#            logger.debug('------heyhey---enter isinstance')
+#            return map(super(ObjectIdField,self).prepare_value,value)
+#
+#        #return ast.literal_eval(value)
+#        return super(ObjectIdField,self).prepare_value(value)
+#
+#    def to_python(self, value):
+#        if value is None:
+#            return value
+#
+#        if isinstance(value,list):
+#            return [i for i in value if isinstance(i,ObjectId)] | [ObjectId(i) for i in value if not isinstance(i,ObjectId)]
+#
+#        return super(ObjectIdField,self).to_python(value)
         #
         #if isinstance(value,list):
         #    return eval(value)
@@ -113,8 +132,7 @@ class status(models.Model):
     #    return "%d, %d, %s, %s " % (self.free,self.total,self.update_on,self.update_by)
 
 class parklot(models.Model):
-    #pk_id=models.CharField(max_length=24,db_column='id',verbose_name='parklotId')
-    pk_id=ObjectIdField(db_column='id',verbose_name='ParklotId')
+    pk_id=models.CharField(max_length=24,db_column='id',verbose_name='parklotId')
     description=models.CharField(max_length=50)
     addr = EmbedOverrideCharField('addr')
     create_on=models.DateTimeField('create_on')
@@ -189,15 +207,15 @@ class parklot(models.Model):
             if res == 1:
                 #print '[DEBUG]:save successfully!'
                 pass
-
+#
 class regcheck(models.Model):
     #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='regcheckId')
-    pk_id = ObjectIdField(db_column='id',verbose_name='regcheckId')
+    pk_id=ObjectIdField(db_column='id',verbose_name='regcheckId')
     #todo:next should be objectid
     #agent=models.CharField(max_length=24,verbose_name='agentId')
     #parklot=models.CharField(max_length=24, verbose_name='parklotId')
-    agent=ObjectIdField()
-    parklot=ObjectIdField()
+    parklot=ObjectIdField(db_column='parklot',verbose_name='parklotId')
+    agent=ObjectIdField(db_column='agent',verbose_name='agentId')
     car_plate=models.CharField(max_length=24)
     create_on=models.DateTimeField()
     update_on=models.DateTimeField()
@@ -216,13 +234,14 @@ class regcheck(models.Model):
 
 class parkticket(models.Model):
     #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='parkticketId')
-    pk_id = ObjectIdField(db_column='id', verbose_name='parkticketId')
+    pk_id= ObjectIdField(db_column='id',verbose_name='parkticketId')
     car_plate=models.CharField(max_length=20)
     #todo next 2 should be objectid field
     #parklot=models.CharField(max_length=24)
-    parklot=ObjectIdField()
     #agent=models.CharField(max_length=24)
-    agent=ObjectIdField()
+    parklot=ObjectIdField(db_column='parklot',verbose_name='parklotId')
+    agent=ObjectIdField(db_column='agent',verbose_name='agentId')
+
     create_on=models.DateTimeField()
     update_on=models.DateTimeField()
     payment_state = models.CharField(max_length=30,db_column='payment_state', blank=True)
@@ -244,7 +263,7 @@ class parkticket(models.Model):
     #    else:
     #        return self.parklot
     ##search_parklot.short_cut
-#
+##
     #def detail_agent(self):
     #    agent=db.agent
     #    result=agent.find_one({'_id':ObjectId(self.agent)})
@@ -254,14 +273,11 @@ class parkticket(models.Model):
     #        return self.agent
 
 class agent(models.Model):
-    #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')
-    pk_id = ObjectIdField(db_column='id', verbose_name='agentId')
+    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')
     nick=models.CharField(max_length=20)
     pic=models.CharField(max_length=24,blank=True,default='img/test.jpg')
     parklot=models.CharField(max_length=200,blank=True)
-    #parklot=ObjectIdListField(db_column='parklot',verbose_name='parklotList')
-
-    #parklot=objectIDField()
+    #parklot=ObjectIdField()
     #parklot=models.ManyToManyField(parklot,blank=True,editable=False)
     #parklot=models.ForeignKey(parklot)
 #

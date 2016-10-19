@@ -103,7 +103,7 @@ class regcheckAdmin(admin.ModelAdmin):
     def queryset(self, request):
         # qs=super(parklotAdmin,self).queryset(request)
         qs = self.model._default_manager.get_query_set()
-        logger.debug('heyheyhey-----{0}'.format(request.GET))
+        logger.debug('request.GET-----{0}'.format(request.GET))
         ###
         ordering = self.get_ordering(request)
         if ordering:
@@ -127,14 +127,17 @@ class regcheckAdmin(admin.ModelAdmin):
         if q != '':
             regcheck_obj_list = self.model.objects.filter(car_plate__contains=q)
             try:
-                regcheck_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
-                regcheck_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
-                regcheck_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
+                b=ObjectId(q)
+                logger.debug('ObjectId----{0}------{1}'.format(b,type(b)))
+                regcheck_obj_list |= self.model.objects.filter(pk__exact=b)
+                regcheck_obj_list |= self.model.objects.filter(agent__exact=b)
+                regcheck_obj_list |= self.model.objects.filter(parklot__exact=b)
             except:
                 pass
-            logger.debug('heyheyhey----resultlo-{0}'.format(regcheck_obj_list))
+            logger.debug('regcheck_obj_list----resultlo-{0}'.format(regcheck_obj_list))
         else:
             regcheck_obj_list = self.model.objects.all()
+            #return super(ModelAdmin,self).queryset(request)
         for regcheck in regcheck_obj_list:
             result_list.append(regcheck.pk)
 
@@ -145,7 +148,7 @@ class regcheckAdmin(admin.ModelAdmin):
         return qs.filter(pk__in=result_list)  # apply the filter
 
 class parkticketAdmin(admin.ModelAdmin):
-    search_fields=['car_plate']
+    search_fields=['pk_id','car_plate','parklot','agent']
     readonly_fields = ['pk_id','car_plate', 'parklot', 'agent', 'create_on', 'update_on', 'payment_state', 'amount',
                        'duration','transaction_no']
     fieldsets =[
@@ -185,6 +188,7 @@ class parkticketAdmin(admin.ModelAdmin):
             parkticket_obj_list = self.model.objects.filter(car_plate__contains=q)
             try:
                 parkticket_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
+                logger.debug('hahhaha------{0}'.format(ObjectId(q)))
                 parkticket_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
                 parkticket_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
             except:
