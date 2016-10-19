@@ -8,13 +8,12 @@ from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
 from mongoengine import connect
-
 from pymongo import MongoClient
-
-
 import logging
-client = MongoClient('localhost', 27017)
-db = client.bleparking
+from django.conf import settings
+db_conf = settings.DATABASES['default']
+client = MongoClient(db_conf['HOST'], int(db_conf['PORT']))
+db = eval("client.{0}".format(db_conf['NAME']))
 
 logger = logging.getLogger('django')
 
@@ -36,6 +35,7 @@ class EmbedOverrideParklotStatusfield(EmbeddedModelField):
 
 class ObjectIdField(models.TextField):
     """    model Fields for objectID    """
+    #http://django-chinese-docs.readthedocs.io/en/latest/howto/custom-model-fields.html?highlight=to_python#django.db.models.Field.to_python
     __metaclass__ = models.SubfieldBase
     # prepare_value used as first and ObjectIdfield can used be searched, but sth unknown changed and  ObjectId search got failure
     # 1.5 django doc doesn't mention prepare_value but get_prep_value so use this one instead
@@ -176,7 +176,7 @@ class parklot(models.Model):
         pre = parklot.find_one({'_id': ObjectId(self.pk)})
         #print "***************** %s" % (type(self.pk),)
         if pre == None:
-            #now = datetime.datetime.now()
+            now = datetime.datetime.now()
             current['create_on']=now
             current['update_on']=now
             #status
@@ -230,6 +230,23 @@ class regcheck(models.Model):
     pic=models.CharField(max_length=100,blank=True)
     class Meta:
         db_table='regcheck'
+    def detail_parklot(self):
+        parklot=db.parklot
+        result=parklot.find_one({'_id':ObjectId(self.parklot)})
+        logger.debug('herehere---------------{0}'.format(self.parklot))
+        #return "%s---%s,%s,%s# <%s>" % (result['description'],result['city'],result['district'],result['street'],result['id'])
+        if result:
+            return "%s---%s,%s,%s,%s <%s>" % (result['description'],result['addr']['province'],result['addr']['city'],result['addr']['district'],result['addr']['street'],result['_id'])
+        else:
+            return self.parklot
+    #search_parklot.short_cut
+    def detail_agent(self):
+        agent=db.agent
+        result=agent.find_one({'_id':ObjectId(self.agent)})
+        if result:
+            return "%s,%s <%s>" % (result['nick'],result['phone'],result['_id'])
+        else:
+            return self.agent
 
 
 class parkticket(models.Model):
@@ -253,24 +270,23 @@ class parkticket(models.Model):
     class Meta:
         db_table="parkticket"
 
-    #def detail_parklot(self):
-    #    parklot=db.parklot
-    #    result=parklot.find_one({'_id':ObjectId(self.parklot)})
-    #    logger.debug('herehere---------------{0}'.format(self.parklot))
-    #    #return "%s---%s,%s,%s# <%s>" % (result['description'],result['city'],result['district'],result['street'],result['id'])
-    #    if result:
-    #        return "%s---%s,%s,%s,%s <%s>" % (result['description'],result['addr']['province'],result['addr']['city'],result['addr']['district'],result['addr']['street'],result['_id'])
-    #    else:
-    #        return self.parklot
-    ##search_parklot.short_cut
-##
-    #def detail_agent(self):
-    #    agent=db.agent
-    #    result=agent.find_one({'_id':ObjectId(self.agent)})
-    #    if result:
-    #        return "%s,%s <%s>" % (result['nick'],result['phone'],result['_id'])
-    #    else:
-    #        return self.agent
+    def detail_parklot(self):
+        parklot=db.parklot
+        result=parklot.find_one({'_id':ObjectId(self.parklot)})
+        logger.debug('herehere---------------{0}'.format(self.parklot))
+        #return "%s---%s,%s,%s# <%s>" % (result['description'],result['city'],result['district'],result['street'],result['id'])
+        if result:
+            return "%s---%s,%s,%s,%s <%s>" % (result['description'],result['addr']['province'],result['addr']['city'],result['addr']['district'],result['addr']['street'],result['_id'])
+        else:
+            return self.parklot
+    #search_parklot.short_description
+    def detail_agent(self):
+        agent=db.agent
+        result=agent.find_one({'_id':ObjectId(self.agent)})
+        if result:
+            return "%s,%s <%s>" % (result['nick'],result['phone'],result['_id'])
+        else:
+            return self.agent
 
 class agent(models.Model):
     pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')

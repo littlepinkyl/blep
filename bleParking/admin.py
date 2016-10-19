@@ -3,9 +3,15 @@ from .models import parklot,regcheck,parkticket,addr,gps,status,agent
 from django.contrib.contenttypes import generic
 from bson.objectid import ObjectId
 from django import forms
+from pymongo import MongoClient
 import datetime
 import logging
+from django.conf import settings
 logger = logging.getLogger('django')
+db_conf = settings.DATABASES['default']
+client = MongoClient(db_conf['HOST'], int(db_conf['PORT']))
+db = eval("client.{0}".format(db_conf['NAME']))
+
 
 #c#lass parklotShipInline(admin.TabularInline):
 #    model = agent.p#arklot.through
@@ -94,7 +100,7 @@ class parklotAdmin(admin.ModelAdmin):
         obj.save()
 
 class regcheckAdmin(admin.ModelAdmin):
-    list_display=('pk_id','agent','parklot','car_plate','create_on','state')
+    list_display=('pk_id','detail_agent','detail_parklot','car_plate','create_on','state')
     search_fields=['car_plate','agent','parklot']
     readonly_fields=['pk_id','agent','parklot','car_plate','create_on','update_on','state','pic']
     fields=['pk_id','agent','parklot','car_plate','pic','state','create_on','update_on']
@@ -156,7 +162,7 @@ class parkticketAdmin(admin.ModelAdmin):
         ('Status Details',{'fields':['payment_state','amount','duration','transaction_no'],'classes':['collapse']}),
         #(None,{'fields':['create_on','update_on']}),
     ]
-    list_display=('pk_id','car_plate','parklot','agent','create_on','payment_state')
+    list_display=('pk_id','car_plate','detail_parklot','detail_agent','create_on','payment_state')
     #fields = ['car_plate', 'parklot', 'agent', 'State Details', 'create_on', 'update_on']
     list_filter=['create_on']
     #date_hierarchy='create_on'
@@ -248,15 +254,22 @@ class agentAdmin(admin.ModelAdmin):
             #agent_obj_list |= self.model.objects.filter(parklot__contains=ObjectId(q))
             try:
                 agent_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
+                #find_all?
 
-            except:
-                pass
+                for result in db.agent.find({"parklot":{"$all":[ObjectId(q)]}}):
+                    if result is not None:
+                        logger.debug('heyheyhey parklot get!!---{0}-----{1}'.format(result,type(result)))
+                        result_list.append(result['_id'])
+                    else :
+                        logger.debug('heyheyhey result is None!')
+            except Exception,e:
+                logger.debug("Exception found!----------{0}".format(e))
             logger.debug('heyheyhey----resultlo-{0}'.format(agent_obj_list))
         else:
             agent_obj_list = self.model.objects.all()
         for agent in agent_obj_list:
                 result_list.append(agent.pk)
-
+        logger.debug('pymongo_result_here-------{0}'.format(result_list))
         # Search on the other related model (Other Name)
         #other_names_obj_list = OtherName.objects.filter(name__contains=q)
         #for other_name in other_names_obj_list:
