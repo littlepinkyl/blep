@@ -192,7 +192,7 @@ class parklot(models.Model):
             # if not exist, insert and print id here, if true then success
         else:
             # if exist, update it manually
-            #now = datetime.datetime.now()
+            now = datetime.datetime.now()
             current['update_on'] = now
             if hasattr(self,'status'):
                 current['status']={

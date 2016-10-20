@@ -12,13 +12,6 @@ db_conf = settings.DATABASES['default']
 client = MongoClient(db_conf['HOST'], int(db_conf['PORT']))
 db = eval("client.{0}".format(db_conf['NAME']))
 
-
-#c#lass parklotShipInline(admin.TabularInline):
-#    model = agent.p#arklot.through
-#    fieldsets=[
-#        (None,)
-#    ]
-
 class parklotAdmin(admin.ModelAdmin):
     #display with it's address link
     list_display=('description','pk_id','addr')
@@ -31,20 +24,9 @@ class parklotAdmin(admin.ModelAdmin):
     fields = ['pk_id', 'description', 'addr', 'gps', 'status', 'create_on']
     #todo: filter according to addr
     search_fields=['description','pk_id']
+    list_per_page=20
 
     readonly_fields=['create_on','pk_id',]
-
-    def get_search_results(self,request,queryset,search_term):
-        queryset,use_distinct=super(parklotAdmin,self).get_search_results(request,queryset,search_term)
-        try:
-            logger.debug('heyheyhey-----{0}'.format(search_term))
-            search_term_as_object = ObjectId(search_term)
-        except ValueError:
-            pass
-        else:
-            queryset |= self.model.objects.filter(pk_id=search_term_as_object)
-        return queryset,use_distinct
-
 
     def queryset(self,request):
         #qs=super(parklotAdmin,self).queryset(request)
@@ -72,6 +54,10 @@ class parklotAdmin(admin.ModelAdmin):
         # Search on main model (parklot)
         if q != '':
             parklot_obj_list = self.model.objects.filter(description__contains=q)
+            #support to search city,district,street
+            # for i in db.parklot.find({"addr":{"$elemMatch":{"author":"joe","score":{"$gte":5}}}}):
+            #for i in db.parklot.find({"addr":{"$elemMatch":{"$or": [{"city":/q/},{"street":/q/}]    }}}):
+            #    pass
             try:
                 parklot_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
             except:
@@ -102,10 +88,16 @@ class parklotAdmin(admin.ModelAdmin):
 class regcheckAdmin(admin.ModelAdmin):
     list_display=('pk_id','detail_agent','detail_parklot','car_plate','create_on','state')
     search_fields=['car_plate','agent','parklot']
-    readonly_fields=['pk_id','agent','parklot','car_plate','create_on','update_on','state','pic']
-    fields=['pk_id','agent','parklot','car_plate','pic','state','create_on','update_on']
+    readonly_fields=['pk_id','agent','parklot','car_plate','create_on','update_on','state','pic','detail_parklot','detail_agent','preview']
+    fields=['pk_id','detail_agent','detail_parklot','car_plate','state','create_on','update_on','preview']
     list_filter=['create_on']
+    list_per_page = 20
     #date_hierarchy='create_on'
+    def preview(self, obj):
+        return '<img src="%s/%s" height="256" width="256" />\n<a href="%s%s" target="_blank" align="center"> pic link </a>' % (settings.MEDIA_URL, obj.pic,settings.MEDIA_URL, obj.pic,)
+
+    preview.allow_tags = True
+    preview.short_description = "picture"
     def queryset(self, request):
         # qs=super(parklotAdmin,self).queryset(request)
         qs = self.model._default_manager.get_query_set()
@@ -156,16 +148,16 @@ class regcheckAdmin(admin.ModelAdmin):
 class parkticketAdmin(admin.ModelAdmin):
     search_fields=['pk_id','car_plate','parklot','agent']
     readonly_fields = ['pk_id','car_plate', 'parklot', 'agent', 'create_on', 'update_on', 'payment_state', 'amount',
-                       'duration','transaction_no']
+                       'duration','transaction_no','detail_parklot','detail_agent']
     fieldsets =[
-        ('Main Data',{'fields':['pk_id','car_plate','parklot','agent','create_on','update_on']}),
+        ('Main Data',{'fields':['pk_id','car_plate','detail_parklot','detail_agent','create_on','update_on']}),
         ('Status Details',{'fields':['payment_state','amount','duration','transaction_no'],'classes':['collapse']}),
         #(None,{'fields':['create_on','update_on']}),
     ]
     list_display=('pk_id','car_plate','detail_parklot','detail_agent','create_on','payment_state')
     #fields = ['car_plate', 'parklot', 'agent', 'State Details', 'create_on', 'update_on']
     list_filter=['create_on']
-    #date_hierarchy='create_on'
+    list_per_page = 20
     def queryset(self, request):
         # qs=super(parklotAdmin,self).queryset(request)
         qs = self.model._default_manager.get_query_set()
@@ -213,17 +205,24 @@ class parkticketAdmin(admin.ModelAdmin):
 
 class agentAdmin(admin.ModelAdmin):
     list_display=('nick','phone','pk_id','parklot')
-    fields=['pk_id','phone','nick','pic','parklot','status','create_on','update_on']
+    fields=['pk_id','preview','phone','nick','parklot','status','create_on','update_on']
 
     search_fields=['nick','phone','pk_id']
-    readonly_fields=('status','create_on','update_on','pic','pk_id')
-    list_per_page=10
+    readonly_fields=('status','create_on','update_on','pic','pk_id','preview')
+    list_per_page=20
 
     def formfield_for_dbfield(self, db_field, **kwargs):
         formfield = super(agentAdmin, self).formfield_for_dbfield(db_field, **kwargs)
         if db_field.name in ['parklot']:
             formfield.widget = forms.Textarea(attrs=formfield.widget.attrs)
-        return formfield
+        return formfield#
+
+    def preview(self, obj):
+        return '<img src="%s/%s" height="207" width="148" />' % (settings.MEDIA_URL, obj.pic)
+
+    preview.allow_tags = True
+    preview.short_description = "picture"
+
     def queryset(self,request):
         #qs=super(parklotAdmin,self).queryset(request)
         qs = self.model._default_manager.get_query_set()
