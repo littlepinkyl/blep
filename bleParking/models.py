@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from django.db import models
 from djangotoolbox.fields import EmbeddedModelField
 from .forms import ObjectListCharField,ObjectListFloatField,ObjectListParklotStatusField
@@ -8,6 +9,7 @@ from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
 from mongoengine import connect
+from django.utils.html import format_html
 from pymongo import MongoClient
 import logging
 from django.conf import settings
@@ -267,6 +269,7 @@ class parkticket(models.Model):
     duration=models.CharField(max_length=10,blank=True)
     transaction_no=models.CharField(max_length=30,blank=True)
 
+
     class Meta:
         db_table="parkticket"
 
@@ -310,6 +313,26 @@ class agent(models.Model):
         (1,u'invalid'),
     )
     status=models.IntegerField(choices=agentStatus,verbose_name='(Status)')
+
+    def show_parklot(self):
+        result=[]
+        if isinstance(self.parklot,list):
+            for i in self.parklot:
+                tmp=db.parklot.find_one({"_id":i})
+                if tmp:
+                    result.append("%s-%s%s%s%s <%s>".encode("gbk") % (tmp['description'],tmp['addr']['province'],tmp['addr']['city'],tmp['addr']['district'],tmp['addr']['street'],tmp['_id']))
+                else:
+                    result.append(self.parklot)
+                return result
+        else:
+            tmp = db.parklot.find_one({"_id": self.parklot})
+            if tmp:
+                return "%s-%s%s%s%s <%s>" % (tmp['description'],tmp['addr']['province'],tmp['addr']['city'],tmp['addr']['district'],tmp['addr']['street'],tmp['_id'])
+            else:
+                return self.parklot
+    show_parklot.short_description='ParklotDetails'
+
+
 
     class Meta:
         db_table='agent'

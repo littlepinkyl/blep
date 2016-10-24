@@ -1,3 +1,4 @@
+# coding=gbk
 from django.contrib import admin
 from .models import parklot,regcheck,parkticket,addr,gps,status,agent
 from django.contrib.contenttypes import generic
@@ -11,6 +12,10 @@ logger = logging.getLogger('django')
 db_conf = settings.DATABASES['default']
 client = MongoClient(db_conf['HOST'], int(db_conf['PORT']))
 db = eval("client.{0}".format(db_conf['NAME']))
+from django.contrib.admin import SimpleListFilter
+from django.utils.translation import ugettext_lazy as _
+
+
 
 class parklotAdmin(admin.ModelAdmin):
     #display with it's address link
@@ -54,12 +59,15 @@ class parklotAdmin(admin.ModelAdmin):
         # Search on main model (parklot)
         if q != '':
             parklot_obj_list = self.model.objects.filter(description__contains=q)
+            for result in db.parklot.find({"$or": [{"addr.city": {"$regex":q}}, {"addr.district": {"$regex":q}}]}):
+                result_list.append(result['_id'])
             #support to search city,district,street
             # for i in db.parklot.find({"addr":{"$elemMatch":{"author":"joe","score":{"$gte":5}}}}):
             #for i in db.parklot.find({"addr":{"$elemMatch":{"$or": [{"city":/q/},{"street":/q/}]    }}}):
             #    pass
             try:
                 parklot_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
+
             except:
                 pass
             logger.debug('heyheyhey----resultlo-{0}'.format(parklot_obj_list))
@@ -84,13 +92,33 @@ class parklotAdmin(admin.ModelAdmin):
             obj.status.update_on=now
         #logger.debug('--------------------------{0}--------------{1}'.format(obj, obj.status))
         obj.save()
+class RegcheckStateListFilter(SimpleListFilter):
+    #null, INIT, READY, PROGRESS, PAYING, DONE
+    title= _('regcheck state')
+    parameter_name='regcheck_state'
 
+    def lookups(self,request,model_admin):
+        return (
+            ('start',_('Start')),
+            ('working',_('Working')),
+            ('finished',_('Finished')),
+            ('other',_('Other')),
+        )
+    def queryset(self,request,queryset):
+        if self.value() == 'start':
+            return queryset.filter(state__exact=0)
+        if self.value() == 'working':
+            return queryset.filter(state__exact=1)
+        if self.value() == 'finished':
+            return queryset.filter(state__exact=2)
+        if self.value() == 'other':
+            return queryset.filter(state__exact=3)
 class regcheckAdmin(admin.ModelAdmin):
     list_display=('pk_id','detail_agent','detail_parklot','car_plate','create_on','state')
     search_fields=['car_plate','agent','parklot']
     readonly_fields=['pk_id','agent','parklot','car_plate','create_on','update_on','state','pic','detail_parklot','detail_agent','preview']
     fields=['pk_id','detail_agent','detail_parklot','car_plate','state','create_on','update_on','preview']
-    list_filter=['create_on']
+    list_filter=['create_on',RegcheckStateListFilter]
     list_per_page = 20
     #date_hierarchy='create_on'
     def preview(self, obj):
@@ -124,6 +152,7 @@ class regcheckAdmin(admin.ModelAdmin):
         # Search on main model (parklot)
         if q != '':
             regcheck_obj_list = self.model.objects.filter(car_plate__contains=q)
+
             try:
                 b=ObjectId(q)
                 logger.debug('ObjectId----{0}------{1}'.format(b,type(b)))
@@ -145,6 +174,35 @@ class regcheckAdmin(admin.ModelAdmin):
         #    result_list.append(other_name.person.pk)
         return qs.filter(pk__in=result_list)  # apply the filter
 
+class PaymentStateListFilter(SimpleListFilter):
+    #null, INIT, READY, PROGRESS, PAYING, DONE
+    title= _('payment state')
+    parameter_name='payment_state'
+
+    def lookups(self,request,model_admin):
+        return (
+            ('null',_('Null')),
+            ('init',_('Initial')),
+            ('ready',_('Ready')),
+            ('processing',_('Processing(Progress)')),
+            ('paying',_('Paying')),
+            ('done',_('Done')),
+        )
+    def queryset(self,request,queryset):
+        if self.value() == 'init':
+            return queryset.filter(payment_state__exact='INIT')
+        if self.value() == 'ready':
+            return queryset.filter(payment_state__exact='READY')
+        if self.value() == 'processing':
+            return queryset.filter(payment_state__exact='PROGRESS')
+        if self.value() == 'paying':
+            return queryset.filter(payment_state__exact='PAYING')
+        if self.value() == 'done':
+            return queryset.filter(payment_state__exact='DONE')
+        if self.value() == 'null':
+            return queryset.exclude(payment_state__in=['INIT','READY', 'PROGRESS', 'PAYING', 'DONE'])
+        pass
+
 class parkticketAdmin(admin.ModelAdmin):
     search_fields=['pk_id','car_plate','parklot','agent']
     readonly_fields = ['pk_id','car_plate', 'parklot', 'agent', 'create_on', 'update_on', 'payment_state', 'amount',
@@ -156,7 +214,7 @@ class parkticketAdmin(admin.ModelAdmin):
     ]
     list_display=('pk_id','car_plate','detail_parklot','detail_agent','create_on','payment_state')
     #fields = ['car_plate', 'parklot', 'agent', 'State Details', 'create_on', 'update_on']
-    list_filter=['create_on']
+    list_filter=['create_on',PaymentStateListFilter]
     list_per_page = 20
     def queryset(self, request):
         # qs=super(parklotAdmin,self).queryset(request)
@@ -203,8 +261,13 @@ class parkticketAdmin(admin.ModelAdmin):
         #    result_list.append(other_name.person.pk)
         return qs.filter(pk__in=result_list)  # apply the filter
 
+
+
+
+
+
 class agentAdmin(admin.ModelAdmin):
-    list_display=('nick','phone','pk_id','parklot')
+    list_display=('nick','phone','pk_id','show_parklot')
     fields=['pk_id','preview','phone','nick','parklot','status','create_on','update_on']
 
     search_fields=['nick','phone','pk_id']
