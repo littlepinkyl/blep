@@ -315,15 +315,26 @@ class agent(models.Model):
     status=models.IntegerField(choices=agentStatus,verbose_name='(Status)')
 
     def show_parklot(self):
-        result=[]
+        result=''
+        r = []
         if isinstance(self.parklot,list):
+
             for i in self.parklot:
                 tmp=db.parklot.find_one({"_id":i})
                 if tmp:
-                    result.append("%s-%s%s%s%s <%s>".encode("gbk") % (tmp['description'],tmp['addr']['province'],tmp['addr']['city'],tmp['addr']['district'],tmp['addr']['street'],tmp['_id']))
+                    s='%s-%s,%s,%s,%s <%s>' % (tmp['description'],
+                                               tmp['addr']['province'],
+                                               tmp['addr']['city'],
+                                               tmp['addr']['district'],
+                                               tmp['addr']['street'],
+                                               tmp['_id'])
+                    r.append(s)
+
                 else:
-                    result.append(self.parklot)
-                return result
+                    r.append('[%s]' %(str(i),))
+                result=','.join(r)
+            print r
+            return result
         else:
             tmp = db.parklot.find_one({"_id": self.parklot})
             if tmp:

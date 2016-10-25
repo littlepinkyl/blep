@@ -1,5 +1,6 @@
 # Django settings for playground project.
-
+import chartkick
+import os
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG
 
@@ -69,10 +70,12 @@ STATIC_ROOT = ''
 STATIC_URL = '/static/'
 
 # Additional locations of static files
+
 STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
+    chartkick.js(),
 )
 
 # List of finder classes that know how to find static files in
@@ -112,6 +115,7 @@ TEMPLATE_DIRS = (
     # Put strings here, like "/home/html/django_templates" or "C:/www/django/templates".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
+    os.path.join(os.path.dirname(__file__), '../templates').replace('\\','/'),
 )
 #SITE_ID=1
 
@@ -127,6 +131,7 @@ INSTALLED_APPS = (
     # Uncomment the next line to enable admin documentation:
     # 'django.contrib.admindocs',
     'bleParking',
+    'chartkick',
 )
 
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'#
