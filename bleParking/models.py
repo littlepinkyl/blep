@@ -1,18 +1,23 @@
+# -*- coding:utf-8 -*-
 from django.db import models
 from djangotoolbox.fields import EmbeddedModelField
 from .forms import ObjectListCharField,ObjectListFloatField,ObjectListParklotStatusField
 import datetime
 import re
+from bson.objectid import ObjectId
 from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
 from mongoengine import connect
-import logging
-logger = logging.getLogger('django')
+from django.utils.html import format_html
 from pymongo import MongoClient
-from bson.objectid import ObjectId
-client = MongoClient('localhost', 27017)
-db = client.bleparking
+import logging
+from django.conf import settings
+db_conf = settings.DATABASES['default']
+client = MongoClient(db_conf['HOST'], int(db_conf['PORT']))
+db = eval("client.{0}".format(db_conf['NAME']))
+
+logger = logging.getLogger('django')
 
 
 class EmbedOverrideCharField(EmbeddedModelField):
@@ -28,6 +33,79 @@ class EmbedOverrideParklotStatusfield(EmbeddedModelField):
     def formfield(self,**kwargs):
         return models.Field.formfield(self, ObjectListParklotStatusField, **kwargs)
 # Create your models here.
+
+
+class ObjectIdField(models.TextField):
+    """    model Fields for objectID    """
+    #http://django-chinese-docs.readthedocs.io/en/latest/howto/custom-model-fields.html?highlight=to_python#django.db.models.Field.to_python
+    __metaclass__ = models.SubfieldBase
+    # prepare_value used as first and ObjectIdfield can used be searched, but sth unknown changed and  ObjectId search got failure
+    # 1.5 django doc doesn't mention prepare_value but get_prep_value so use this one instead
+    # and it WORKS!!!!!! DON'T KNOW WHY!!!!
+    #def prepare_value(self, value):
+    #    '''python to human'''
+    #    if not value:
+    #        return value
+#
+    #    try:
+#
+    #        logger.debug('objectid_prepare_value---------{0}'.format(re.findall(r'ObjectId\("([a-zA-Z0-9]+)"\)',value)))
+    #        return re.findall(r'ObjectId\(\'([a-z0-9]+)\'\)',value)
+    #    except Exception:
+    #        return value
+
+    def get_prep_value(self,value):
+        logger.debug('get_prep_value-------{0}----{1}'.format(value,type(value)))
+        if not isinstance(value,ObjectId):
+            return ObjectId(value)
+        return value
+
+
+    def to_python(self, value):
+        ''' human to python'''
+        if not value:#
+            return value
+        logger.debug('objectid_to_python---------{0}-------{1}'.format(value, type(value)))
+        return value
+
+        #try:#
+        #    r=ObjectId(value)
+        #    logger.debug('objectid_to_python---------{0}-------{1}'.format(r,type(r)))
+        #    return r
+        #except Exception:
+        #    return value
+
+
+#class ObjectIdListField(ObjectIdField):
+#
+#    def __init__(self, *args, **kwargs):
+#        super(ObjectIdField, self).__init__(*args, **kwargs)
+#
+#    def prepare_value(self, value):
+#        if not value:
+#            return value
+#
+#        if isinstance(value, list):
+#            logger.debug('------heyhey---enter isinstance')
+#            return map(super(ObjectIdField,self).prepare_value,value)
+#
+#        #return ast.literal_eval(value)
+#        return super(ObjectIdField,self).prepare_value(value)
+#
+#    def to_python(self, value):
+#        if value is None:
+#            return value
+#
+#        if isinstance(value,list):
+#            return [i for i in value if isinstance(i,ObjectId)] | [ObjectId(i) for i in value if not isinstance(i,ObjectId)]
+#
+#        return super(ObjectIdField,self).to_python(value)
+        #
+        #if isinstance(value,list):
+        #    return eval(value)
+        #return unicode(value)
+
+
 class addr(models.Model):
     province=models.CharField(max_length=10)
     city=models.CharField(max_length=10)
@@ -100,7 +178,7 @@ class parklot(models.Model):
         pre = parklot.find_one({'_id': ObjectId(self.pk)})
         #print "***************** %s" % (type(self.pk),)
         if pre == None:
-            #now = datetime.datetime.now()
+            now = datetime.datetime.now()
             current['create_on']=now
             current['update_on']=now
             #status
@@ -116,7 +194,7 @@ class parklot(models.Model):
             # if not exist, insert and print id here, if true then success
         else:
             # if exist, update it manually
-            #now = datetime.datetime.now()
+            now = datetime.datetime.now()
             current['update_on'] = now
             if hasattr(self,'status'):
                 current['status']={
@@ -131,12 +209,15 @@ class parklot(models.Model):
             if res == 1:
                 #print '[DEBUG]:save successfully!'
                 pass
-
+#
 class regcheck(models.Model):
-    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='regcheckId')
+    #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='regcheckId')
+    pk_id=ObjectIdField(db_column='id',verbose_name='regcheckId')
     #todo:next should be objectid
-    agent=models.CharField(max_length=24,verbose_name='agentId')
-    parklot=models.CharField(max_length=24, verbose_name='parklotId')
+    #agent=models.CharField(max_length=24,verbose_name='agentId')
+    #parklot=models.CharField(max_length=24, verbose_name='parklotId')
+    parklot=ObjectIdField(db_column='parklot',verbose_name='parklotId')
+    agent=ObjectIdField(db_column='agent',verbose_name='agentId')
     car_plate=models.CharField(max_length=24)
     create_on=models.DateTimeField()
     update_on=models.DateTimeField()
@@ -151,14 +232,35 @@ class regcheck(models.Model):
     pic=models.CharField(max_length=100,blank=True)
     class Meta:
         db_table='regcheck'
+    def detail_parklot(self):
+        parklot=db.parklot
+        result=parklot.find_one({'_id':ObjectId(self.parklot)})
+        logger.debug('herehere---------------{0}'.format(self.parklot))
+        #return "%s---%s,%s,%s# <%s>" % (result['description'],result['city'],result['district'],result['street'],result['id'])
+        if result:
+            return "%s---%s,%s,%s,%s <%s>" % (result['description'],result['addr']['province'],result['addr']['city'],result['addr']['district'],result['addr']['street'],result['_id'])
+        else:
+            return self.parklot
+    #search_parklot.short_cut
+    def detail_agent(self):
+        agent=db.agent
+        result=agent.find_one({'_id':ObjectId(self.agent)})
+        if result:
+            return "%s,%s <%s>" % (result['nick'],result['phone'],result['_id'])
+        else:
+            return self.agent
 
 
 class parkticket(models.Model):
-    pk_id = models.CharField(max_length=24, db_column='id', verbose_name='parkticketId')
+    #pk_id = models.CharField(max_length=24, db_column='id', verbose_name='parkticketId')
+    pk_id= ObjectIdField(db_column='id',verbose_name='parkticketId')
     car_plate=models.CharField(max_length=20)
     #todo next 2 should be objectid field
-    parklot=models.CharField(max_length=24)
-    agent=models.CharField(max_length=24)
+    #parklot=models.CharField(max_length=24)
+    #agent=models.CharField(max_length=24)
+    parklot=ObjectIdField(db_column='parklot',verbose_name='parklotId')
+    agent=ObjectIdField(db_column='agent',verbose_name='agentId')
+
     create_on=models.DateTimeField()
     update_on=models.DateTimeField()
     payment_state = models.CharField(max_length=30,db_column='payment_state', blank=True)
@@ -167,17 +269,34 @@ class parkticket(models.Model):
     duration=models.CharField(max_length=10,blank=True)
     transaction_no=models.CharField(max_length=30,blank=True)
 
+
     class Meta:
         db_table="parkticket"
 
-
+    def detail_parklot(self):
+        parklot=db.parklot
+        result=parklot.find_one({'_id':ObjectId(self.parklot)})
+        logger.debug('herehere---------------{0}'.format(self.parklot))
+        #return "%s---%s,%s,%s# <%s>" % (result['description'],result['city'],result['district'],result['street'],result['id'])
+        if result:
+            return "%s---%s,%s,%s,%s <%s>" % (result['description'],result['addr']['province'],result['addr']['city'],result['addr']['district'],result['addr']['street'],result['_id'])
+        else:
+            return self.parklot
+    #search_parklot.short_description
+    def detail_agent(self):
+        agent=db.agent
+        result=agent.find_one({'_id':ObjectId(self.agent)})
+        if result:
+            return "%s,%s <%s>" % (result['nick'],result['phone'],result['_id'])
+        else:
+            return self.agent
 
 class agent(models.Model):
     pk_id = models.CharField(max_length=24, db_column='id', verbose_name='agentId')
     nick=models.CharField(max_length=20)
     pic=models.CharField(max_length=24,blank=True,default='img/test.jpg')
     parklot=models.CharField(max_length=200,blank=True)
-    #parklot=objectIDField()
+    #parklot=ObjectIdField()
     #parklot=models.ManyToManyField(parklot,blank=True,editable=False)
     #parklot=models.ForeignKey(parklot)
 #
@@ -194,6 +313,37 @@ class agent(models.Model):
         (1,u'invalid'),
     )
     status=models.IntegerField(choices=agentStatus,verbose_name='(Status)')
+
+    def show_parklot(self):
+        result=''
+        r = []
+        if isinstance(self.parklot,list):
+
+            for i in self.parklot:
+                tmp=db.parklot.find_one({"_id":i})
+                if tmp:
+                    s='%s-%s,%s,%s,%s <%s>' % (tmp['description'],
+                                               tmp['addr']['province'],
+                                               tmp['addr']['city'],
+                                               tmp['addr']['district'],
+                                               tmp['addr']['street'],
+                                               tmp['_id'])
+                    r.append(s)
+
+                else:
+                    r.append('[%s]' %(str(i),))
+                result=','.join(r)
+            print r
+            return result
+        else:
+            tmp = db.parklot.find_one({"_id": self.parklot})
+            if tmp:
+                return "%s-%s%s%s%s <%s>" % (tmp['description'],tmp['addr']['province'],tmp['addr']['city'],tmp['addr']['district'],tmp['addr']['street'],tmp['_id'])
+            else:
+                return self.parklot
+    show_parklot.short_description='ParklotDetails'
+
+
 
     class Meta:
         db_table='agent'

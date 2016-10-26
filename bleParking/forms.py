@@ -23,7 +23,7 @@ class ObjectListCharField(forms.CharField):
                 newvalue[key] = val
         # Integer, Date,  Float,
         #return ", ".join(["%s=%s" % (k, v) for k, v in newvalue.items()])
-        return json.dumps(newvalue,indent=4)
+        return json.dumps(newvalue,indent=4,ensure_ascii=False)
 
     def to_python(self, value):
         if not value:

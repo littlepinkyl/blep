@@ -1,17 +1,21 @@
+# coding=gbk
 from django.contrib import admin
 from .models import parklot,regcheck,parkticket,addr,gps,status,agent
 from django.contrib.contenttypes import generic
 from bson.objectid import ObjectId
 from django import forms
+from pymongo import MongoClient
 import datetime
 import logging
+from django.conf import settings
 logger = logging.getLogger('django')
+db_conf = settings.DATABASES['default']
+client = MongoClient(db_conf['HOST'], int(db_conf['PORT']))
+db = eval("client.{0}".format(db_conf['NAME']))
+from django.contrib.admin import SimpleListFilter
+from django.utils.translation import ugettext_lazy as _
 
-#c#lass parklotShipInline(admin.TabularInline):
-#    model = agent.p#arklot.through
-#    fieldsets=[
-#        (None,)
-#    ]
+
 
 class parklotAdmin(admin.ModelAdmin):
     #display with it's address link
@@ -25,20 +29,9 @@ class parklotAdmin(admin.ModelAdmin):
     fields = ['pk_id', 'description', 'addr', 'gps', 'status', 'create_on']
     #todo: filter according to addr
     search_fields=['description','pk_id']
+    list_per_page=20
 
     readonly_fields=['create_on','pk_id',]
-
-    def get_search_results(self,request,queryset,search_term):
-        queryset,use_distinct=super(parklotAdmin,self).get_search_results(request,queryset,search_term)
-        try:
-            logger.debug('heyheyhey-----{0}'.format(search_term))
-            search_term_as_object = ObjectId(search_term)
-        except ValueError:
-            pass
-        else:
-            queryset |= self.model.objects.filter(pk_id=search_term_as_object)
-        return queryset,use_distinct
-
 
     def queryset(self,request):
         #qs=super(parklotAdmin,self).queryset(request)
@@ -66,8 +59,15 @@ class parklotAdmin(admin.ModelAdmin):
         # Search on main model (parklot)
         if q != '':
             parklot_obj_list = self.model.objects.filter(description__contains=q)
+            for result in db.parklot.find({"$or": [{"addr.city": {"$regex":q}}, {"addr.district": {"$regex":q}}]}):
+                result_list.append(result['_id'])
+            #support to search city,district,street
+            # for i in db.parklot.find({"addr":{"$elemMatch":{"author":"joe","score":{"$gte":5}}}}):
+            #for i in db.parklot.find({"addr":{"$elemMatch":{"$or": [{"city":/q/},{"street":/q/}]    }}}):
+            #    pass
             try:
                 parklot_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
+
             except:
                 pass
             logger.debug('heyheyhey----resultlo-{0}'.format(parklot_obj_list))
@@ -92,18 +92,44 @@ class parklotAdmin(admin.ModelAdmin):
             obj.status.update_on=now
         #logger.debug('--------------------------{0}--------------{1}'.format(obj, obj.status))
         obj.save()
+class RegcheckStateListFilter(SimpleListFilter):
+    #null, INIT, READY, PROGRESS, PAYING, DONE
+    title= _('regcheck state')
+    parameter_name='regcheck_state'
 
+    def lookups(self,request,model_admin):
+        return (
+            ('start',_('Start')),
+            ('working',_('Working')),
+            ('finished',_('Finished')),
+            ('other',_('Other')),
+        )
+    def queryset(self,request,queryset):
+        if self.value() == 'start':
+            return queryset.filter(state__exact=0)
+        if self.value() == 'working':
+            return queryset.filter(state__exact=1)
+        if self.value() == 'finished':
+            return queryset.filter(state__exact=2)
+        if self.value() == 'other':
+            return queryset.filter(state__exact=3)
 class regcheckAdmin(admin.ModelAdmin):
-    list_display=('pk_id','agent','parklot','car_plate','create_on','state')
-    search_fields=['car_plate']
-    readonly_fields=['pk_id','agent','parklot','car_plate','create_on','update_on','state','pic']
-    fields=['pk_id','agent','parklot','car_plate','pic','state','create_on','update_on']
-    list_filter=['create_on']
+    list_display=('pk_id','detail_agent','detail_parklot','car_plate','create_on','state')
+    search_fields=['car_plate','agent','parklot']
+    readonly_fields=['pk_id','agent','parklot','car_plate','create_on','update_on','state','pic','detail_parklot','detail_agent','preview']
+    fields=['pk_id','detail_agent','detail_parklot','car_plate','state','create_on','update_on','preview']
+    list_filter=['create_on',RegcheckStateListFilter]
+    list_per_page = 20
     #date_hierarchy='create_on'
+    def preview(self, obj):
+        return '<img src="%s/%s" height="256" width="256" />\n<a href="%s%s" target="_blank" align="center"> pic link </a>' % (settings.MEDIA_URL, obj.pic,settings.MEDIA_URL, obj.pic,)
+
+    preview.allow_tags = True
+    preview.short_description = "picture"
     def queryset(self, request):
         # qs=super(parklotAdmin,self).queryset(request)
         qs = self.model._default_manager.get_query_set()
-        logger.debug('heyheyhey-----{0}'.format(request.GET))
+        logger.debug('request.GET-----{0}'.format(request.GET))
         ###
         ordering = self.get_ordering(request)
         if ordering:
@@ -125,16 +151,20 @@ class regcheckAdmin(admin.ModelAdmin):
         #
         # Search on main model (parklot)
         if q != '':
-            regcheck_obj_list = self.m#odel.objects.filter(car_plate__contains=q)
+            regcheck_obj_list = self.model.objects.filter(car_plate__contains=q)
+
             try:
-                regcheck_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
-                #regcheck_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
-                #regcheck_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
+                b=ObjectId(q)
+                logger.debug('ObjectId----{0}------{1}'.format(b,type(b)))
+                regcheck_obj_list |= self.model.objects.filter(pk__exact=b)
+                regcheck_obj_list |= self.model.objects.filter(agent__exact=b)
+                regcheck_obj_list |= self.model.objects.filter(parklot__exact=b)
             except:
                 pass
-            logger.debug('heyheyhey----resultlo-{0}'.format(regcheck_obj_list))
+            logger.debug('regcheck_obj_list----resultlo-{0}'.format(regcheck_obj_list))
         else:
             regcheck_obj_list = self.model.objects.all()
+            #return super(ModelAdmin,self).queryset(request)
         for regcheck in regcheck_obj_list:
             result_list.append(regcheck.pk)
 
@@ -144,19 +174,48 @@ class regcheckAdmin(admin.ModelAdmin):
         #    result_list.append(other_name.person.pk)
         return qs.filter(pk__in=result_list)  # apply the filter
 
+class PaymentStateListFilter(SimpleListFilter):
+    #null, INIT, READY, PROGRESS, PAYING, DONE
+    title= _('payment state')
+    parameter_name='payment_state'
+
+    def lookups(self,request,model_admin):
+        return (
+            ('null',_('Null')),
+            ('init',_('Initial')),
+            ('ready',_('Ready')),
+            ('processing',_('Processing(Progress)')),
+            ('paying',_('Paying')),
+            ('done',_('Done')),
+        )
+    def queryset(self,request,queryset):
+        if self.value() == 'init':
+            return queryset.filter(payment_state__exact='INIT')
+        if self.value() == 'ready':
+            return queryset.filter(payment_state__exact='READY')
+        if self.value() == 'processing':
+            return queryset.filter(payment_state__exact='PROGRESS')
+        if self.value() == 'paying':
+            return queryset.filter(payment_state__exact='PAYING')
+        if self.value() == 'done':
+            return queryset.filter(payment_state__exact='DONE')
+        if self.value() == 'null':
+            return queryset.exclude(payment_state__in=['INIT','READY', 'PROGRESS', 'PAYING', 'DONE'])
+        pass
+
 class parkticketAdmin(admin.ModelAdmin):
-    search_fields=['car_plate']
+    search_fields=['pk_id','car_plate','parklot','agent']
     readonly_fields = ['pk_id','car_plate', 'parklot', 'agent', 'create_on', 'update_on', 'payment_state', 'amount',
-                       'duration','transaction_no']
+                       'duration','transaction_no','detail_parklot','detail_agent']
     fieldsets =[
-        ('Main Data',{'fields':['pk_id','car_plate','parklot','agent','create_on','update_on']}),
+        ('Main Data',{'fields':['pk_id','car_plate','detail_parklot','detail_agent','create_on','update_on']}),
         ('Status Details',{'fields':['payment_state','amount','duration','transaction_no'],'classes':['collapse']}),
         #(None,{'fields':['create_on','update_on']}),
     ]
-    list_display=('pk_id','car_plate','parklot','agent','create_on','payment_state')
+    list_display=('pk_id','car_plate','detail_parklot','detail_agent','create_on','payment_state')
     #fields = ['car_plate', 'parklot', 'agent', 'State Details', 'create_on', 'update_on']
-    list_filter=['create_on']
-    #date_hierarchy='create_on'
+    list_filter=['create_on',PaymentStateListFilter]
+    list_per_page = 20
     def queryset(self, request):
         # qs=super(parklotAdmin,self).queryset(request)
         qs = self.model._default_manager.get_query_set()
@@ -185,8 +244,9 @@ class parkticketAdmin(admin.ModelAdmin):
             parkticket_obj_list = self.model.objects.filter(car_plate__contains=q)
             try:
                 parkticket_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
-                #parkticket_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
-                #parkticket_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
+                logger.debug('hahhaha------{0}'.format(ObjectId(q)))
+                parkticket_obj_list |= self.model.objects.filter(parklot__exact=ObjectId(q))
+                parkticket_obj_list |= self.model.objects.filter(agent__exact=ObjectId(q))
             except:
                 pass
             logger.debug('heyheyhey----resultlo-{0}'.format(parkticket_obj_list))
@@ -201,19 +261,31 @@ class parkticketAdmin(admin.ModelAdmin):
         #    result_list.append(other_name.person.pk)
         return qs.filter(pk__in=result_list)  # apply the filter
 
+
+
+
+
+
 class agentAdmin(admin.ModelAdmin):
-    list_display=('nick','phone','pk_id','parklot')
-    fields=['pk_id','phone','nick','pic','parklot','status','create_on','update_on']
+    list_display=('nick','phone','pk_id','show_parklot')
+    fields=['pk_id','preview','phone','nick','parklot','status','create_on','update_on']
 
     search_fields=['nick','phone','pk_id']
-    readonly_fields=('status','create_on','update_on','pic','pk_id')
-    list_per_page=10
+    readonly_fields=('status','create_on','update_on','pic','pk_id','preview')
+    list_per_page=20
 
     def formfield_for_dbfield(self, db_field, **kwargs):
         formfield = super(agentAdmin, self).formfield_for_dbfield(db_field, **kwargs)
         if db_field.name in ['parklot']:
             formfield.widget = forms.Textarea(attrs=formfield.widget.attrs)
-        return formfield
+        return formfield#
+
+    def preview(self, obj):
+        return '<img src="%s/%s" height="207" width="148" />' % (settings.MEDIA_URL, obj.pic)
+
+    preview.allow_tags = True
+    preview.short_description = "picture"
+
     def queryset(self,request):
         #qs=super(parklotAdmin,self).queryset(request)
         qs = self.model._default_manager.get_query_set()
@@ -244,15 +316,22 @@ class agentAdmin(admin.ModelAdmin):
             #agent_obj_list |= self.model.objects.filter(parklot__contains=ObjectId(q))
             try:
                 agent_obj_list |= self.model.objects.filter(pk__exact=ObjectId(q))
+                #find_all?
 
-            except:
-                pass
+                for result in db.agent.find({"parklot":{"$all":[ObjectId(q)]}}):
+                    if result is not None:
+                        logger.debug('heyheyhey parklot get!!---{0}-----{1}'.format(result,type(result)))
+                        result_list.append(result['_id'])
+                    else :
+                        logger.debug('heyheyhey result is None!')
+            except Exception,e:
+                logger.debug("Exception found!----------{0}".format(e))
             logger.debug('heyheyhey----resultlo-{0}'.format(agent_obj_list))
         else:
             agent_obj_list = self.model.objects.all()
         for agent in agent_obj_list:
                 result_list.append(agent.pk)
-
+        logger.debug('pymongo_result_here-------{0}'.format(result_list))
         # Search on the other related model (Other Name)
         #other_names_obj_list = OtherName.objects.filter(name__contains=q)
         #for other_name in other_names_obj_list:
