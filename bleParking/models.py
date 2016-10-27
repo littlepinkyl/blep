@@ -5,10 +5,10 @@ from .forms import ObjectListCharField,ObjectListFloatField,ObjectListParklotSta
 import datetime
 import re
 from bson.objectid import ObjectId
-from save_the_change.mixins import SaveTheChange
+#from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
-from mongoengine import connect
+#from mongoengine import connect
 from django.utils.html import format_html
 from pymongo import MongoClient
 import logging
