@@ -5,6 +5,7 @@ from .forms import ObjectListCharField,ObjectListFloatField,ObjectListParklotSta
 import datetime
 import re
 from bson.objectid import ObjectId
+import collections
 #from save_the_change.mixins import SaveTheChange
 from django.utils.translation import ugettext_lazy as _
 #add belows to rewrite update/save
@@ -167,11 +168,7 @@ class parklot(models.Model):
                 "city":self.addr.city,
                 "district":self.addr.district,
                 "street":self.addr.street,
-            },
-            "gps":{
-                "longitude":self.gps.longitude,
-                "latitude":self.gps.latitude,
-            },
+            }
         }
         #print "this***! " , self.status.free
         parklot = db.parklot
@@ -189,6 +186,10 @@ class parklot(models.Model):
                     "update_on":self.status.update_on,
                     "update_by": self.status.update_by,
                 }
+            if hasattr(self,'gps'):
+                current["gps"]=collections.OrderedDict()
+                current["gps"]["longitude"]=self.gps.longitude
+                current["gps"]["latitude"]=self.gps.latitude
 
             pre_id = parklot.insert_one(current).inserted_id
             # if not exist, insert and print id here, if true then success
@@ -203,6 +204,11 @@ class parklot(models.Model):
                     "update_on":self.status.update_on,
                     "update_by":self.status.update_by,
                 }
+            if hasattr(self,'gps'):
+                current["gps"]=collections.OrderedDict()
+                current["gps"]["longitude"]=self.gps.longitude
+                current["gps"]["latitude"]=self.gps.latitude
+
             #logger.debug('123123123123............')
             res = parklot.update_one({'_id': ObjectId(self.pk)},
                                    {'$set': current})

@@ -3,6 +3,8 @@ from django import forms
 import datetime
 import json
 
+import logging
+logger = logging.getLogger('django')
 def is_json(myjson):
     try:
         json.loads(myjson)
